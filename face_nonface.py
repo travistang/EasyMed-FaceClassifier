@@ -41,8 +41,8 @@ def n_fold_batch_generator(n,face_img_path,nonface_img_path):
 	# 	(...),
 	# ]
 	for i in range(n):
-		test_gen = batch_generator([fold[i]])
-		train_gen = batch_generator([f for ind,f in enumerate(fold) if ind != i])
+		test_gen = batch_generator([folds[i]])
+		train_gen = batch_generator([f for ind,f in enumerate(folds) if ind != i])
 		yield train_gen,test_gen
 #	for fold in permutations(folds):
 #		yield batch_generator(fold[:n - 1]), batch_generator([fold[n - 1]])
