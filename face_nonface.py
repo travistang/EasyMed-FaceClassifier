@@ -40,8 +40,12 @@ def n_fold_batch_generator(n,face_img_path,nonface_img_path):
 	#	((face_img,non_face_img),(face_img,non_face_img)...),
 	# 	(...),
 	# ]
-	for fold in permutations(folds):
-		yield batch_generator(fold[:n - 1]), batch_generator([fold[n - 1]])
+	for i in range(n):
+		test_gen = batch_generator([fold[i]])
+		train_gen = batch_generator([f for ind,f in enumerate(fold) if ind != i])
+		yield train_gen,test_gen
+#	for fold in permutations(folds):
+#		yield batch_generator(fold[:n - 1]), batch_generator([fold[n - 1]])
 
 # create a generator given a list of folds
 # list of folds should have the form [([a],[b])]
@@ -82,7 +86,7 @@ with tf.name_scope('face_weights'):
 	fin_out = tf.nn.relu(tf.nn.xw_plus_b(fc2,w2,b2))
 	# train op
 	loss 	= tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels = ans_input,logits = fin_out,name = 'loss'))
-	accuracy= tf.reduce_mean(tf.abs(tf.argmax(tf.nn.softmax(fin_out),axis = -1) - ans_input),name = 'accuracy')
+	accuracy= tf.reduce_mean(tf.abs(tf.to_float(tf.argmax(tf.nn.softmax(fin_out),axis = -1)) - tf.to_float(ans_input)),name = 'accuracy')
 	opt 	= tf.train.AdamOptimizer(learning_rate = 0.0001).minimize(loss,var_list = [w1,w2,b1,b2])
 
 	tf.summary.scalar('loss',loss)
@@ -94,79 +98,67 @@ with tf.name_scope('face_weights'):
 
 def main():
 	with tf.Session() as sess:
-                try:
-                    writer = tf.summary.FileWriter('/FaceDataset/tmp/face',sess.graph)
-                    sess.run(tf.global_variables_initializer())
-                    __i = 0
-					'''
-						Each epoch performs one cycle of 5-fold Training
-						Test will be performed when a fold ends
-					'''
-					def make_training_tensors(face_imgs_path,non_face_imgs_path):
-							batch = map(utils.load_image,face_imgs_path + non_face_imgs_path):
-							lbls = np.zeros(len(batch))
-							lbls[:len(face_batch)] = 1.
-							batch = np.stack(batch,axis = 0)
-                            assert batch.shape == (batch_size,224,224,3)
-                            assert lbls.shape == (batch_size,)
-							return batch,lbls
+		try:
+			writer = tf.summary.FileWriter('/FaceDataset/tmp/face',sess.graph)
+			sess.run(tf.global_variables_initializer())
+			__i = 0
 
-                    for epoch in range(num_epochs):
-						for train_gen,test_gen in n_fold_batch_generator(num_folds,face_imgs_dir,nonface_imgs,dir):
-							# perform training on the training set
-							for face_imgs_path,nonface_imgs_path in train_gen:
-								input_batch,lbls = make_training_tensors(face_imgs_path,nonface_imgs_path)
-								summary_val,out_val,loss_val,acc_val,_ = sess.run([
-									summary,fin_out,loss,accuracy,opt],
-									feed_dict = {
-										ans_input: lbls,
-										model_input: input_batch
-									})
-								# logging and stats and stuff
-								writer.add_summary(summary_val,__i)
-								__i += 1
-                                print 'epoch: {}; loss: {}'.format(epoch,loss_val)
-							# perform validation on testing set
-							for face_imgs_path,nonface_imgs_path in test_gen:
-								input_batch,lbls = make_training_tensors(face_imgs_path,nonface_imgs_path)
-								summary_val,out_val,loss_val,acc_val = sess.run([
-									summary,fin_out,loss_val,acc_val],
-									feed_dict = {
-										ans_input: lbls,
-										model_input: input_batch
-									})
-								writer.add_summary(summary_val,__i)
-								__i += 1
-								print 'epoch: {}; test loss: {}'.format(epoch,loss_val)
+			#Each epoch performs one cycle of 5-fold Training
+			#Test will be performed when a fold ends
 
-#                            for face_batch,non_face_batch in batch_generator('FaceDataset/myDataBase','FaceDataset/google_things'):
-#
-#                                    #print 'here'
-#                                    summary_val, out_val,loss_val,_ = sess.run([summary,fin_out,loss,opt],feed_dict = {ans_input: lbls,model_input: batch})
-#                                    writer.add_summary(summary_val,__i)
-#                                    __i += 1
-#                                    print 'epoch: {}; loss: {}'.format(epoch,loss_val)
-#                                    # print '\r'
-							w1_val = w1.eval()
-							w2_val = w2.eval()
-							b1_val = b1.eval()
-							b2_val = b2.eval()
+			def make_training_tensors(face_imgs_path,non_face_imgs_path):
+				batch = map(utils.load_image,face_imgs_path + non_face_imgs_path)
+				lbls = np.zeros(len(batch))
+				lbls[:len(face_batch)] = 1.
+				batch = np.stack(batch,axis = 0)
+				assert batch.shape == (batch_size,224,224,3), 'batch shape is not what it is expected'
+				assert lbls.shape == (batch_size,), 'label shape is not what it is expected'
+				return batch,lbls
 
-                            np.save('w1',w1_val)
-                            np.save('w2',w2_val)
-                            np.save('b1',b1_val)
-                            np.save('b2',b2_val)
+			for epoch in range(num_epochs):
+				for train_gen,test_gen in n_fold_batch_generator(num_folds,face_imgs_dir,nonface_imgs_dir):
+					# perform training on the training set
+					for face_imgs_path,nonface_imgs_path in train_gen:
+						input_batch,lbls = make_training_tensors(face_imgs_path,nonface_imgs_path)
+						summary_val,out_val,loss_val,acc_val,_ = sess.run([
+							summary,fin_out,loss,accuracy,opt],
+							feed_dict = {
+								ans_input: lbls,
+							model_input: input_batch
+						})
+						# logging and stats and stuff
+						writer.add_summary(summary_val,__i)
+						__i += 1
+						print 'epoch: {}; loss: {}'.format(epoch,loss_val)
+					# perform validation on testing set
+					for face_imgs_path,nonface_imgs_path in test_gen:
+						input_batch,lbls = make_training_tensors(face_imgs_path,nonface_imgs_path)
+						summary_val,out_val,loss_val,acc_val = sess.run([
+							summary,fin_out,loss_val,acc_val],
+							feed_dict = {
+								ans_input: lbls,
+								model_input: input_batch
+							})
+						writer.add_summary(summary_val,__i)
+						__i += 1
+						print 'epoch: {}; test loss: {}'.format(epoch,loss_val)
 
-                            print '\n'
+					w1_val = w1.eval()
+					w2_val = w2.eval()
+					b1_val = b1.eval()
+					b2_val = b2.eval()
 
-                except KeyboardInterrupt:
-                    pass
+					np.save('w1',w1_val)
+					np.save('w2',w2_val)
+					np.save('b1',b1_val)
+					np.save('b2',b2_val)
+
+					print '\n'
+
+		except KeyboardInterrupt:
+			pass
 #                saver.save(sess,'tmp/face_classifier.ckpt')
-                print 'Training complete. Model saved'
+		print 'Training complete. Model saved'
 
 if __name__ == '__main__':
-	face_img_path = 'FaceDataset/myDataBase'
-	non_face_batch = 'FaceDataset/google_things'
-	for train_gen,test_gen in n_fold_batch_generator(5,face_img_path,non_face_batch):
-		train_gen.next()
-	#main()
+	main()
