@@ -59,9 +59,8 @@ def batch_generator(folds):
 	face_imgs,nonface_imgs = map(lambda l: reduce(concat,l),folds)
 	num_face = len(face_imgs)
 	num_nonface = len(nonface_imgs)
-	print len(face_imgs),len(nonface_imgs)
-	for i in range(min(len(face_imgs) / num_face,len(nonface_imgs) / num_nonface)):
-		yield face_imgs[i * num_face: (i + 1) * num_face], nonface_imgs[i * num_nonface: (i + 1) * num_nonface]
+	for i in range(min(len(face_imgs) / batch_size,len(nonface_imgs) / batch_size)):
+		yield face_imgs[i * batch_size/2: (i + 1) * batch_size/2], nonface_imgs[i * batch_size/2: (i + 1) * batch_size/2]
 
 
 model_input = tf.placeholder("float",[batch_size,224,224,3])
@@ -86,7 +85,7 @@ with tf.name_scope('face_weights'):
 	fin_out = tf.nn.relu(tf.nn.xw_plus_b(fc2,w2,b2))
 	# train op
 	loss 	= tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels = ans_input,logits = fin_out,name = 'loss'))
-	accuracy= tf.reduce_mean(tf.abs(tf.to_float(tf.argmax(tf.nn.softmax(fin_out),axis = -1)) - tf.to_float(ans_input)),name = 'accuracy')
+        accuracy = batch_size - tf.reduce_sum(tf.abs(tf.cast(tf.argmax(fin_out,axis = -1),tf.float32) - tf.cast(ans_input,tf.float32)))
 	opt 	= tf.train.AdamOptimizer(learning_rate = 0.0001).minimize(loss,var_list = [w1,w2,b1,b2])
 
 	tf.summary.scalar('loss',loss)
@@ -99,25 +98,26 @@ with tf.name_scope('face_weights'):
 def main():
 	with tf.Session() as sess:
 		try:
-			writer = tf.summary.FileWriter('/FaceDataset/tmp/face',sess.graph)
+			writer = tf.summary.FileWriter('FaceDataset/tmp/face',sess.graph)
 			sess.run(tf.global_variables_initializer())
 			__i = 0
-
 			#Each epoch performs one cycle of 5-fold Training
 			#Test will be performed when a fold ends
 
 			def make_training_tensors(face_imgs_path,non_face_imgs_path):
 				batch = map(utils.load_image,face_imgs_path + non_face_imgs_path)
 				lbls = np.zeros(len(batch))
-				lbls[:len(face_batch)] = 1.
+				lbls[:len(face_imgs_path)] = 1.
 				batch = np.stack(batch,axis = 0)
-				assert batch.shape == (batch_size,224,224,3), 'batch shape is not what it is expected'
-				assert lbls.shape == (batch_size,), 'label shape is not what it is expected'
+				assert batch.shape == (batch_size,224,224,3), 'batch shape is not what it is expected,got {}'.format(batch.shape)
+				assert lbls.shape == (batch_size,), 'label shape is not what it is expected, got {}'.format(batch.shape)
 				return batch,lbls
 
 			for epoch in range(num_epochs):
 				for train_gen,test_gen in n_fold_batch_generator(num_folds,face_imgs_dir,nonface_imgs_dir):
 					# perform training on the training set
+                                        train_acc = 0.
+                                        train_batch = 0
 					for face_imgs_path,nonface_imgs_path in train_gen:
 						input_batch,lbls = make_training_tensors(face_imgs_path,nonface_imgs_path)
 						summary_val,out_val,loss_val,acc_val,_ = sess.run([
@@ -129,20 +129,27 @@ def main():
 						# logging and stats and stuff
 						writer.add_summary(summary_val,__i)
 						__i += 1
-						print 'epoch: {}; loss: {}'.format(epoch,loss_val)
+                                                # eval the accuracy
+                                                train_batch += 1
+                                                train_acc += acc_val
+                                                print 'train_acc: {}; acc_val: {}'.format(train_acc,acc_val)
+                                                print 'epoch: {}; loss: {}; accuracy: {}'.format(epoch,loss_val,float(train_acc) / (train_batch * batch_size))
 					# perform validation on testing set
+                                        test_acc = 0.
+                                        test_batch = 0.
 					for face_imgs_path,nonface_imgs_path in test_gen:
 						input_batch,lbls = make_training_tensors(face_imgs_path,nonface_imgs_path)
 						summary_val,out_val,loss_val,acc_val = sess.run([
-							summary,fin_out,loss_val,acc_val],
+							summary,fin_out,loss,accuracy],
 							feed_dict = {
 								ans_input: lbls,
 								model_input: input_batch
 							})
 						writer.add_summary(summary_val,__i)
 						__i += 1
-						print 'epoch: {}; test loss: {}'.format(epoch,loss_val)
-
+                                                test_batch += 1
+                                                test_acc += acc_val
+                                                print 'epoch: {}; test loss: {}; accuracy: {}'.format(epoch,loss_val,float(test_acc) / (test_batch * batch_size))
 					w1_val = w1.eval()
 					w2_val = w2.eval()
 					b1_val = b1.eval()
