@@ -1,9 +1,9 @@
-import skimage
-import skimage.io
-import skimage.transform
+#import skimage
+#import skimage.io
+#import skimage.transform
+import cv2
 import numpy as np
-
-
+from data_augmentation import *
 # synset = [l.strip() for l in open('synset.txt').readlines()]
 
 
@@ -11,18 +11,29 @@ import numpy as np
 # [height, width, depth]
 def load_image(path):
     # load image
-    img = skimage.io.imread(path)
-    img = img / 255.0
-    assert (0 <= img).all() and (img <= 1.0).all()
-    # print "Original Image Shape: ", img.shape
-    # we crop image from center
-    short_edge = min(img.shape[:2])
-    yy = int((img.shape[0] - short_edge) / 2)
-    xx = int((img.shape[1] - short_edge) / 2)
-    crop_img = img[yy: yy + short_edge, xx: xx + short_edge]
-    # resize to 224, 224
-    resized_img = skimage.transform.resize(crop_img, (224, 224))
-    return resized_img
+#    img = skimage.io.imread(path)
+#    img = img / 255.0
+#    assert (0 <= img).all() and (img <= 1.0).all()
+#    # print "Original Image Shape: ", img.shape
+#    # we crop image from center
+#    short_edge = min(img.shape[:2])
+#    yy = int((img.shape[0] - short_edge) / 2)
+#    xx = int((img.shape[1] - short_edge) / 2)
+#    crop_img = img[yy: yy + short_edge, xx: xx + short_edge]
+#    # resize to 224, 224
+#    resized_img = skimage.transform.resize(crop_img, (224, 224))
+    try:
+        img = cv2.imread(path)
+        img = data_augmentation([img],{
+                'horizontal_flips': True,
+                'gaussian_blur': True,
+            })[0]
+        img = img / 255.0
+        return cv2.resize(img,(224,224))
+    except TypeError:
+        print path
+        raise
+    #return resized_img
 
 
 # returns the top1 string
