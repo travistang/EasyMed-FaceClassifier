@@ -99,8 +99,8 @@ def test_net(path,checkpoint_path,input_op_name,output_op_name):
 
 		loader.restore(sess,checkpoint_path)
 		input_op = sess.graph.get_tensor_by_name(input_op_name)
-		output_op = sess.graph.get_tensor_by_name(output_op_name)
-		return sess.run(output_op,feed_dict = {input_op,img})
+		output_op = sess.graph.get_operation_by_name(output_op_name)
+		return sess.run(output_op,feed_dict = {input_op: img})
 
 def parse_eye_file(path):
 	org_x,org_y = 384,286
