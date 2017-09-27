@@ -63,8 +63,8 @@ def batch_generator(folds):
 		yield face_imgs[i * batch_size/2: (i + 1) * batch_size/2], nonface_imgs[i * batch_size/2: (i + 1) * batch_size/2]
 
 
-model_input = tf.placeholder("float",[batch_size,224,224,3])
-ans_input   = tf.placeholder('int32',[batch_size])
+model_input = tf.placeholder("float",[batch_size,224,224,3],name = 'model_input')
+ans_input   = tf.placeholder('int32',[batch_size],name = 'ans_input')
 vgg = vgg16.Vgg16()
 with tf.name_scope('content_vgg'):
 	vgg.build(model_input)
@@ -82,18 +82,23 @@ with tf.name_scope('face_weights'):
 	# first fc
 	fc2 = tf.nn.relu(tf.nn.dropout(tf.nn.xw_plus_b(vgg_oup,w1,b1),0.8))
 	# second (and last) fc
-	fin_out = tf.nn.relu(tf.nn.xw_plus_b(fc2,w2,b2))
+	fin_out = tf.nn.relu(tf.nn.xw_plus_b(fc2,w2,b2),name = 'model_output')
 	# train op
 	loss 	= tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels = ans_input,logits = fin_out,name = 'loss'))
         accuracy = batch_size - tf.reduce_sum(tf.abs(tf.cast(tf.argmax(fin_out,axis = -1),tf.float32) - tf.cast(ans_input,tf.float32)))
-	opt 	= tf.train.AdamOptimizer(learning_rate = 0.0001).minimize(loss,var_list = [w1,w2,b1,b2])
+	opt 	= tf.train.AdamOptimizer(learning_rate = 0.0005).minimize(loss,var_list = [w1,w2,b1,b2])
 
 	tf.summary.scalar('loss',loss)
 	tf.summary.scalar('accuracy',accuracy)
 	tf.summary.histogram('output',fin_out)
 
 	summary = tf.summary.merge_all()
-	saver = tf.train.Saver()
+        saver = tf.train.Saver({
+                'w1':w1,
+                'w2':w2,
+                'b1':b1,
+                'b2':b2,
+            })
 
 def main():
 	with tf.Session() as sess:
@@ -164,7 +169,7 @@ def main():
 
 		except KeyboardInterrupt:
 			pass
-#                saver.save(sess,'tmp/face_classifier.ckpt')
+                saver.save(sess,'tmp/face_classifier.ckpt')
 		print 'Training complete. Model saved'
 
 if __name__ == '__main__':

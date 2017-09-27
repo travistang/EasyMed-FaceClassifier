@@ -1,7 +1,7 @@
 #import skimage
 #import skimage.io
 #import skimage.transform
-import cv2,cv
+import cv2
 import numpy as np
 from data_augmentation import *
 # synset = [l.strip() for l in open('synset.txt').readlines()]
@@ -45,7 +45,7 @@ def read_pgm_to_array(path,byteorder = '>'):
 			                    offset=len(header)
 			                    ).reshape((int(height), int(width)))
 	# formatting image...
-	return cv.fromarray(img)
+	return img
 
 ## returns the top1 string
 #def print_prob(prob, file_path):
