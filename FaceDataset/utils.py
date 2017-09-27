@@ -1,9 +1,9 @@
 #import skimage
 #import skimage.io
 #import skimage.transform
-import cv2
+#import cv2,cv
 import numpy as np
-from data_augmentation import *
+#from data_augmentation import *
 # synset = [l.strip() for l in open('synset.txt').readlines()]
 
 
@@ -11,65 +11,76 @@ from data_augmentation import *
 # [height, width, depth]
 def load_image(path):
     # load image
-#    img = skimage.io.imread(path)
-#    img = img / 255.0
-#    assert (0 <= img).all() and (img <= 1.0).all()
-#    # print "Original Image Shape: ", img.shape
-#    # we crop image from center
-#    short_edge = min(img.shape[:2])
-#    yy = int((img.shape[0] - short_edge) / 2)
-#    xx = int((img.shape[1] - short_edge) / 2)
-#    crop_img = img[yy: yy + short_edge, xx: xx + short_edge]
-#    # resize to 224, 224
-#    resized_img = skimage.transform.resize(crop_img, (224, 224))
-    try:
-        img = cv2.imread(path)
-        img = data_augmentation([img],{
-                'horizontal_flips': True,
+	try:
+		if '.pgm' in path:
+			img = read_pgm_to_array(path)
+		else:
+			img = cv2.imread(path)
+			img = data_augmentation([img],{
+            	'horizontal_flips': True,
                 'gaussian_blur': True,
-            })[0]
-        img = img / 255.0
-        return cv2.resize(img,(224,224))
-    except TypeError:
-        print path
-        raise
+    		})[0]
+		img = img / 255.0
+		return cv2.resize(img,(224,224))
+	except TypeError:
+		print path
+		raise
     #return resized_img
 
+# ref:https://stackoverflow.com/questions/7368739/numpy-and-16-bit-pgm
+def read_pgm_to_array(path,byteorder = '>'):
+	with open(path, 'rb') as f:
+		buffer = f.read()
+		try:
+			header, width, height, maxval = re.search(
+			    b"(^P5\s(?:\s*#.*[\r\n])*"
+			    b"(\d+)\s(?:\s*#.*[\r\n])*"
+			    b"(\d+)\s(?:\s*#.*[\r\n])*"
+			    b"(\d+)\s(?:\s*#.*[\r\n]\s)*)", buffer).groups()
+		except AttributeError:
+			raise ValueError("Not a raw PGM file: '%s'" % filename)
+			img = numpy.frombuffer(buffer,
+			                    dtype='u1' if int(maxval) < 256 else byteorder+'u2',
+			                    count=int(width)*int(height),
+			                    offset=len(header)
+			                    ).reshape((int(height), int(width)))
+	# formatting image...
+	return cv.fromarray(img)
 
-# returns the top1 string
-def print_prob(prob, file_path):
-    synset = [l.strip() for l in open(file_path).readlines()]
-
-    # print prob
-    pred = np.argsort(prob)[::-1]
-
-    # Get top1 label
-    top1 = synset[pred[0]]
-    print(("Top1: ", top1, prob[pred[0]]))
-    # Get top5 label
-    top5 = [(synset[pred[i]], prob[pred[i]]) for i in range(5)]
-    print(("Top5: ", top5))
-    return top1
-
-
-def load_image2(path, height=None, width=None):
-    # load image
-    img = skimage.io.imread(path)
-    img = img / 255.0
-    if height is not None and width is not None:
-        ny = height
-        nx = width
-    elif height is not None:
-        ny = height
-        nx = img.shape[1] * ny / img.shape[0]
-    elif width is not None:
-        nx = width
-        ny = img.shape[0] * nx / img.shape[1]
-    else:
-        ny = img.shape[0]
-        nx = img.shape[1]
-    return skimage.transform.resize(img, (ny, nx))
-
+## returns the top1 string
+#def print_prob(prob, file_path):
+#    synset = [l.strip() for l in open(file_path).readlines()]
+#
+#    # print prob
+#    pred = np.argsort(prob)[::-1]
+#
+#    # Get top1 label
+#    top1 = synset[pred[0]]
+#    print(("Top1: ", top1, prob[pred[0]]))
+#    # Get top5 label
+#    top5 = [(synset[pred[i]], prob[pred[i]]) for i in range(5)]
+#    print(("Top5: ", top5))
+#    return top1
+#
+#
+#def load_image2(path, height=None, width=None):
+#    # load image
+#    img = skimage.io.imread(path)
+#    img = img / 255.0
+#    if height is not None and width is not None:
+#        ny = height
+#        nx = width
+#    elif height is not None:
+#        ny = height
+#        nx = img.shape[1] * ny / img.shape[0]
+#    elif width is not None:
+#        nx = width
+#        ny = img.shape[0] * nx / img.shape[1]
+#    else:
+#        ny = img.shape[0]
+#        nx = img.shape[1]
+#    return skimage.transform.resize(img, (ny, nx))
+#
 
 def test():
     img = skimage.io.imread("./test_data/starry_night.jpg")
@@ -78,6 +89,27 @@ def test():
     img = skimage.transform.resize(img, (ny, nx))
     skimage.io.imsave("./test_data/test/output.jpg", img)
 
+def test_net(path,checkpoint_path,input_op_name,output_op_name):
+	import tensorflow as tf
+	img = load_image(path)
+	img = np.expand_dims(img,0) # expand the first dimension of the tensor to be the batch_size of it
+	# TODO: load the model...
+	with tf.Session() as sess:
+		loader = tf.train.import_checkpoint_path(checkpoint_path + '.meta')
+
+		loader.restore(sess,checkpoint_path)
+		input_op = sess.graph.get_tensor_by_name(input_op_name)
+		output_op = sess.graph.get_tensor_by_name(output_op_name)
+		return sess.run(output_op,feed_dict = {input_op,img})
+
+def parse_eye_file(path):
+	org_x,org_y = 384,286
+
+	with open(path) as f:
+		pos = f.readlines()[-1].strip().split()
+		# return the normalized coordinates of the eyes
+		return np.array(map(lambda (p,dim): float(p) / dim,zip(map(int,pos),[org_x,org_y] * 2)))
 
 if __name__ == "__main__":
-    test()
+    res = parse_eye_file('BioID-FD-Eyepos-V1/BioID_0000.eye')
+    print res
