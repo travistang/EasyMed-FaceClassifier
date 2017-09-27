@@ -1,9 +1,9 @@
 #import skimage
 #import skimage.io
 #import skimage.transform
-#import cv2,cv
+import cv2,cv
 import numpy as np
-#from data_augmentation import *
+from data_augmentation import *
 # synset = [l.strip() for l in open('synset.txt').readlines()]
 
 
