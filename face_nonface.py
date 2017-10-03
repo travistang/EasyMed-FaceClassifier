@@ -5,14 +5,14 @@ import tensorflow as tf
 import os
 from random import shuffle
 from itertools import permutations
-batch_size = 4
+batch_size = 32
 #data_ratio = 0.5
 vgg_out_dim = 4096
-num_folds = 5
+num_folds = 2
 face_imgs_dir = 'FaceDataset/myDataBase'
 nonface_imgs_dir = 'FaceDataset/google_things'
 
-fc2_num_weights = 256
+fc2_num_weights = 1024
 fin_out_dim = 2
 
 # training config
@@ -101,7 +101,7 @@ with tf.name_scope('face_weights'):
 	# train op
 	loss 	= tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels = ans_input,logits = fin_out,name = 'loss'))
         accuracy = batch_size - tf.reduce_sum(tf.abs(tf.cast(tf.argmax(fin_out,axis = -1),tf.float32) - tf.cast(ans_input,tf.float32)))
-	opt 	= tf.train.AdamOptimizer(learning_rate = 0.0005).minimize(loss)
+	opt 	= tf.train.AdamOptimizer(learning_rate = 0.0001).minimize(loss)
 
 	tf.summary.scalar('loss',loss)
 	tf.summary.scalar('accuracy',accuracy)

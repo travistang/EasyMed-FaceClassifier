@@ -99,7 +99,8 @@ def test_net(path,checkpoint_path,input_op_name,output_op_name):
 		loader.restore(sess,checkpoint_path)
 		input_op = sess.graph.get_tensor_by_name(input_op_name)
 		output_op = sess.graph.get_operation_by_name(output_op_name)
-		return sess.run(output_op.outputs,feed_dict = {input_op: img})
+                res = tf.nn.softmax(output_op.outputs[0])
+		return sess.run(res,feed_dict = {input_op: img})
 
 def test_face_classifier(face_path,nonface_path,checkpoint_dir):
 	import tensorflow as tf
@@ -135,4 +136,8 @@ def parse_eye_file(path):
 		return np.array(map(lambda (p,dim): float(p) / dim,zip(map(int,pos),[org_x,org_y] * 2)))
 
 if __name__ == "__main__":
-	test_face_classifier('FaceDataset/faces94','FaceDataset/google_things','tmp/face_classifier.ckpt')
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i','--input',help = 'Input Directory for face images',default = 'FaceDataset/faces94')
+    args = parser.parse_args()
+    test_face_classifier(args.input,'FaceDataset/google_things','tmp/face_classifier.ckpt')
