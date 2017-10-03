@@ -63,42 +63,58 @@ def batch_generator(folds):
 		yield face_imgs[i * batch_size/2: (i + 1) * batch_size/2], nonface_imgs[i * batch_size/2: (i + 1) * batch_size/2]
 
 
-model_input = tf.placeholder("float",[batch_size,224,224,3],name = 'model_input')
-ans_input   = tf.placeholder('int32',[batch_size],name = 'ans_input')
+model_input = tf.placeholder("float",[None,224,224,3],name = 'model_input')
+ans_input   = tf.placeholder('int32',[None],name = 'ans_input')
 vgg = vgg16.Vgg16()
 with tf.name_scope('content_vgg'):
 	vgg.build(model_input)
 
 # define the new fc layers here
 with tf.name_scope('face_weights'):
-	w1 = tf.get_variable("w1",[vgg_out_dim,fc2_num_weights],initializer = tf.random_normal_initializer(stddev = 1e-4))
-	b1 = tf.get_variable("b1",initializer = tf.zeros([fc2_num_weights]))
+#	w1 = tf.get_variable("w1",[vgg_out_dim,fc2_num_weights],initializer = tf.random_normal_initializer(stddev = 1e-4))
+#	b1 = tf.get_variable("b1",initializer = tf.zeros([fc2_num_weights]))
+#
+#	w2 = tf.get_variable("w2",[fc2_num_weights,fin_out_dim],initializer = tf.random_normal_initializer(stddev = 1e-4))
+#	b2 = tf.get_variable("b2",initializer = tf.zeros([fin_out_dim]))
 
-	w2 = tf.get_variable("w2",[fc2_num_weights,fin_out_dim],initializer = tf.random_normal_initializer(stddev = 1e-4))
-	b2 = tf.get_variable("b2",initializer = tf.zeros([fin_out_dim]))
+	vgg_oup = vgg.fc6
+        fc1 = tf.layers.dropout(
+                tf.layers.dense(
+                    vgg_oup,
+                    fc2_num_weights,
+                    activation = tf.nn.relu,
+                    kernel_initializer = tf.random_normal_initializer(stddev = 1e-4),
+                    name = 'fc1'),
+                rate = 0.2)
+        fin_out = tf.layers.dense(
+                tf.layers.batch_normalization(fc1),
+                fin_out_dim,
+                activation = tf.nn.relu,
+                kernel_initializer = tf.random_normal_initializer(stddev = 1e-4),
+                name = 'model_output')
 
 	# res of the computation graphs
-	vgg_oup = vgg.fc6
 	# first fc
-	fc2 = tf.nn.relu(tf.nn.dropout(tf.nn.xw_plus_b(vgg_oup,w1,b1),0.8))
-	# second (and last) fc
-	fin_out = tf.nn.relu(tf.nn.xw_plus_b(fc2,w2,b2),name = 'model_output')
+#	fc2 = tf.nn.relu(tf.nn.dropout(tf.nn.xw_plus_b(vgg_oup,w1,b1),0.8))
+#	# second (and last) fc
+#	fin_out = tf.nn.relu(tf.nn.xw_plus_b(fc2,w2,b2),name = 'model_output')
 	# train op
 	loss 	= tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels = ans_input,logits = fin_out,name = 'loss'))
         accuracy = batch_size - tf.reduce_sum(tf.abs(tf.cast(tf.argmax(fin_out,axis = -1),tf.float32) - tf.cast(ans_input,tf.float32)))
-	opt 	= tf.train.AdamOptimizer(learning_rate = 0.0005).minimize(loss,var_list = [w1,w2,b1,b2])
+	opt 	= tf.train.AdamOptimizer(learning_rate = 0.0005).minimize(loss)
 
 	tf.summary.scalar('loss',loss)
 	tf.summary.scalar('accuracy',accuracy)
 	tf.summary.histogram('output',fin_out)
 
 	summary = tf.summary.merge_all()
-        saver = tf.train.Saver({
-                'w1':w1,
-                'w2':w2,
-                'b1':b1,
-                'b2':b2,
-            })
+        saver = tf.train.Saver()
+#        saver = tf.train.Saver({
+#                'w1':w1,
+#                'w2':w2,
+#                'b1':b1,
+#                'b2':b2,
+#            })
 
 def main():
 	with tf.Session() as sess:
@@ -155,15 +171,15 @@ def main():
                                                 test_batch += 1
                                                 test_acc += acc_val
                                                 print 'epoch: {}; test loss: {}; accuracy: {}'.format(epoch,loss_val,float(test_acc) / (test_batch * batch_size))
-					w1_val = w1.eval()
-					w2_val = w2.eval()
-					b1_val = b1.eval()
-					b2_val = b2.eval()
-
-					np.save('w1',w1_val)
-					np.save('w2',w2_val)
-					np.save('b1',b1_val)
-					np.save('b2',b2_val)
+#					w1_val = w1.eval()
+#					w2_val = w2.eval()
+#					b1_val = b1.eval()
+#					b2_val = b2.eval()
+#
+#					np.save('w1',w1_val)
+#					np.save('w2',w2_val)
+#					np.save('b1',b1_val)
+#					np.save('b2',b2_val)
 
 					print '\n'
 

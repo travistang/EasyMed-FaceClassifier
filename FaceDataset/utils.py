@@ -1,9 +1,9 @@
-#import skimage
-#import skimage.io
-#import skimage.transform
 import cv2
 import numpy as np
 from data_augmentation import *
+from random import choice
+from os import listdir
+from os.path import join
 # synset = [l.strip() for l in open('synset.txt').readlines()]
 
 
@@ -92,38 +92,38 @@ def test():
 def test_net(path,checkpoint_path,input_op_name,output_op_name):
 	import tensorflow as tf
 	img = load_image(path)
-	img = np.expand_dims(img,0) # expand the first dimension of the tensor to be the batch_size of it
+        img = [img]
 	with tf.Session() as sess:
-		loader = tf.train.import_checkpoint_path(checkpoint_path + '.meta')
+		loader = tf.train.import_meta_graph(checkpoint_path + '.meta')
 
 		loader.restore(sess,checkpoint_path)
 		input_op = sess.graph.get_tensor_by_name(input_op_name)
 		output_op = sess.graph.get_operation_by_name(output_op_name)
-		return sess.run(output_op,feed_dict = {input_op: img})
+		return sess.run(output_op.outputs,feed_dict = {input_op: img})
 
 def test_face_classifier(face_path,nonface_path,checkpoint_dir):
 	import tensorflow as tf
 	# try each face and non_face images
-	draw_pic = lambda path: choice([i for i in path if '.jpg' in i or '.png' in i])
+	draw_pic = lambda path: join(path,choice([i for i in listdir(path) if '.jpg' in i or '.png' in i]))
 	face_img = draw_pic(face_path)
 	nonface_img = draw_pic(nonface_path)
 
-	res_dict = {0: 'face',1: 'non-face'}
+	res_dict = {0: 'non-face',1: 'face'}
 	print 'testing face image...'
 
 	print 'The model detected face image as: {}'.format(
-		res_dict[test_net(
+		test_net(
 			face_img,
 			checkpoint_dir,
 			'model_input:0',
-			'face_weights/model_output')])
+			'face_weights/model_output/BiasAdd'))
 	print 'testing non-face image'
 	print 'The model detected non-face image as: {}'.format(
-		res_dict[test_net(
+		test_net(
 			nonface_img,
 			checkpoint_dir,
 			'model_input:0',
-			'face_weights/model_output')])
+			'face_weights/model_output/BiasAdd'))
 
 
 def parse_eye_file(path):
@@ -135,4 +135,4 @@ def parse_eye_file(path):
 		return np.array(map(lambda (p,dim): float(p) / dim,zip(map(int,pos),[org_x,org_y] * 2)))
 
 if __name__ == "__main__":
-	test_face_classifier('FaceDataset/face94','FaceDataset/google_things')
+	test_face_classifier('FaceDataset/faces94','FaceDataset/google_things','tmp/face_classifier.ckpt')
